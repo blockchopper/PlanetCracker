@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Suika Clone</title>
+  <title>Planet Cracker</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
   <style>
     body { 
@@ -20,14 +20,14 @@
 </head>
 <body>
     <script>
-        const FRUIT_SIZES = [20, 28, 38, 52, 70, 94, 126, 168, 224, 300, 400];
-        const COLORS = ['#ff6666', '#ffcc66', '#66cc66', '#66ccff', '#cc66ff', '#ff99cc', '#ff9966', '#cccc66', '#66cccc', '#9999ff', '#ff6699'];
+        const FRUIT_SIZES = [20, 28, 38, 52, 70, 94, 126, 168, 224, 300, 400, 32];
+        const COLORS = ['#ff6666', '#ffcc66', '#66cc66', '#66ccff', '#cc66ff', '#ff99cc', '#ff9966', '#cccc66', '#66cccc', '#9999ff', '#ff6699', '#000000'];
         
         let game;
         
-        class SuikaScene extends Phaser.Scene {
+        class PlanetCrackerScene extends Phaser.Scene {
           constructor() {
-            super('SuikaScene');
+            super('PlanetCrackerScene');
             this.dropCooldown = false;
             this.currentFruitHasCollided = false;
             this.centerX = 0;
@@ -38,19 +38,33 @@
             this.fruitQueue = []; // Queue to hold current and next fruit
             this.dropIndicator = null; // Container for drop indicator
             this.score = 0; // Initialize score
+            this.audioContext = null; // Will hold the audio context
+            this.popSounds = []; // Will hold our pop sound configurations
           }
         
           preload() {}
         
           create() {
+            // Initialize audio context
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Create 5 different pop sound configurations
+            this.popSounds = [
+              { frequency: 440, decay: 0.1 },  // A4 note
+              { frequency: 523.25, decay: 0.15 },  // C5 note
+              { frequency: 587.33, decay: 0.12 },  // D5 note
+              { frequency: 659.25, decay: 0.08 },  // E5 note
+              { frequency: 783.99, decay: 0.13 }   // G5 note
+            ];
+
             // Get the center of the screen
             this.centerX = this.cameras.main.width / 2;
             this.centerY = this.cameras.main.height / 2;
-            
+        
             // Calculate play area position (centered)
             this.playAreaX = this.centerX;
             this.playAreaY = this.centerY;
-            
+        
             // Initialize fruits array
             this.fruits = [];
             
@@ -68,8 +82,8 @@
               {
                 fontSize: '32px',
                 fontFamily: 'Arial',
-                color: '#000000',
-                backgroundColor: '#ffffff',
+                color: '#ffffff',
+                backgroundColor: '#333333',
                 padding: { x: 10, y: 5 }
               }
             );
@@ -123,7 +137,7 @@
             this.predictionContainer = this.add.container(predictionX, predictionY);
             
             // Add prediction background
-            const predictionBg = this.add.rectangle(0, 0, predictionSize, predictionSize, 0xffffff)
+            const predictionBg = this.add.rectangle(0, 0, predictionSize, predictionSize, 0x333333)
                 .setStrokeStyle(2, 0x000000);
             this.predictionContainer.add(predictionBg);
             
@@ -135,7 +149,7 @@
             this.lastCursorX = this.playAreaX; // Initialize with center position
         
             this.spawnNextFruit();
-
+        
             // Add input handlers
             this.input.on('pointermove', pointer => {
               if (!this.gameOver && this.currentFruit && !this.dropCooldown) {
@@ -210,7 +224,8 @@
 
                     // Check for merge conditions
                     if (bodyA.fruitType !== undefined && bodyB.fruitType !== undefined && 
-                        bodyA.fruitType === bodyB.fruitType && bodyA.fruitType < FRUIT_SIZES.length - 1) {
+                        bodyA.fruitType === bodyB.fruitType &&
+                        bodyA.fruitType !== FRUIT_SIZES.length - 1) { // Don't merge if either fruit is type 11 (black circle)
                         
                         // Get the collision point (average of the two positions)
                         const collisionX = (bodyA.position.x + bodyB.position.x) / 2;
@@ -222,6 +237,9 @@
                         this.score += Math.floor(areaA/1000+1);
                         this.scoreText.setText(this.score.toString());
 
+                        // Play random pop sound
+                        this.playPopSound();
+
                         // Find and remove both fruits from the game
                         const fruitA = this.fruits.find(fruit => fruit.body === bodyA);
                         const fruitB = this.fruits.find(fruit => fruit.body === bodyB);
@@ -232,55 +250,109 @@
                             fruitB.destroy();
                             this.fruits = this.fruits.filter(f => f !== fruitA && f !== fruitB);
 
-                            // Create new merged fruit
-                            const newFruitType = bodyA.fruitType + 1;
-                            const newRadius = FRUIT_SIZES[newFruitType] / 2;
-                            const newColor = COLORS[newFruitType];
+                            // Special case: if merging the two largest fruits, create a black circle
+                            if (bodyA.fruitType === FRUIT_SIZES.length - 2) { // -2 because we added the black circle size
+                                const newRadius = FRUIT_SIZES[FRUIT_SIZES.length - 1] / 2; // Use the last size (black circle)
+                                const newColor = COLORS[COLORS.length - 1]; // Use black color
 
-                            // Calculate safe spawn position
-                            const safeX = Phaser.Math.Clamp(collisionX, this.playAreaX - 200 + newRadius, this.playAreaX + 200 - newRadius);
+                                // Calculate safe spawn position
+                                const safeX = Phaser.Math.Clamp(collisionX, this.playAreaX - 200 + newRadius, this.playAreaX + 200 - newRadius);
 
-                            // Create merged fruit container
-                            const mergedFruit = this.add.container(safeX, collisionY);
+                                // Create black circle container
+                                const blackCircle = this.add.container(safeX, collisionY);
 
-                            // Draw the circle (visual)
-                            const circle = this.add.circle(0, 0, newRadius, Phaser.Display.Color.HexStringToColor(newColor).color);
-                            circle.setStrokeStyle(2, 0x333333);
+                                // Draw the circle (visual)
+                                const circle = this.add.circle(0, 0, newRadius, Phaser.Display.Color.HexStringToColor(newColor).color);
+                                if (bodyA.fruitType === FRUIT_SIZES.length - 2) { // Only for black circles
+                                    circle.setStrokeStyle(1, 0xffff00); // 1px yellow border
+                                } else {
+                                    circle.setStrokeStyle(2, 0x333333); // Normal dark gray border
+                                }
 
-                            // Rotation indicator line
-                            const line = this.add.line(0, 0, 0, 0, newRadius, 0, 0x000000);
-                            line.setLineWidth(2);
+                                // Add visual to container
+                                blackCircle.add(circle);
 
-                            // Add visuals to container
-                            mergedFruit.add([circle, line]);
+                                // Enable physics on the container
+                                this.matter.add.gameObject(blackCircle, {
+                                    shape: {
+                                        type: 'circle',
+                                        radius: newRadius
+                                    },
+                                    friction: 0.1,
+                                    frictionStatic: 0.1,
+                                    frictionAir: 0.01,
+                                    restitution: 0.2,
+                                    density: 0.001,
+                                    chamfer: { radius: 1 }
+                                });
 
-                            // Enable physics on the container
-                            this.matter.add.gameObject(mergedFruit, {
-                                shape: {
-                                    type: 'circle',
-                                    radius: newRadius
-                                },
-                                friction: 0.1,
-                                frictionStatic: 0.1,
-                                frictionAir: 0.01,
-                                restitution: 0.2,
-                                density: 0.001,
-                                chamfer: { radius: 1 }
-                            });
+                                // Set physics properties
+                                blackCircle.setStatic(false);
+                                blackCircle.setBounce(0.2);
+                                blackCircle.setFriction(0.1);
+                                blackCircle.setFrictionStatic(0.1);
+                                blackCircle.setFrictionAir(0.01);
+                                blackCircle.setDensity(0.001);
 
-                            // Set physics properties
-                            mergedFruit.setStatic(false);
-                            mergedFruit.setBounce(0.2);
-                            mergedFruit.setFriction(0.1);
-                            mergedFruit.setFrictionStatic(0.1);
-                            mergedFruit.setFrictionAir(0.01);
-                            mergedFruit.setDensity(0.001);
+                                // Mark as black circle (type 11)
+                                blackCircle.body.fruitType = FRUIT_SIZES.length - 1;
 
-                            // Track type for merging later
-                            mergedFruit.body.fruitType = newFruitType;
+                                // Add to fruits array
+                                this.fruits.push(blackCircle);
+                            } else if (bodyA.fruitType < FRUIT_SIZES.length - 2) { // Normal merge for non-largest fruits
+                                const newFruitType = bodyA.fruitType + 1;
+                                const newRadius = FRUIT_SIZES[newFruitType] / 2;
+                                const newColor = COLORS[newFruitType];
 
-                            // Add to fruits array
-                            this.fruits.push(mergedFruit);
+                                // Calculate safe spawn position
+                                const safeX = Phaser.Math.Clamp(collisionX, this.playAreaX - 200 + newRadius, this.playAreaX + 200 - newRadius);
+
+                                // Create merged fruit container
+                                const mergedFruit = this.add.container(safeX, collisionY);
+
+                                // Draw the circle (visual)
+                                const circle = this.add.circle(0, 0, newRadius, Phaser.Display.Color.HexStringToColor(newColor).color);
+                                if (bodyA.fruitType === FRUIT_SIZES.length - 2) { // Only for black circles
+                                    circle.setStrokeStyle(1, 0xffff00); // 1px yellow border
+                                } else {
+                                    circle.setStrokeStyle(2, 0x333333); // Normal dark gray border
+                                }
+
+                                // Rotation indicator line
+                                const line = this.add.line(0, 0, 0, 0, newRadius, 0, 0x000000);
+                                line.setLineWidth(2);
+
+                                // Add visuals to container
+                                mergedFruit.add([circle, line]);
+
+                                // Enable physics on the container
+                                this.matter.add.gameObject(mergedFruit, {
+                                    shape: {
+                                        type: 'circle',
+                                        radius: newRadius
+                                    },
+                                    friction: 0.1,
+                                    frictionStatic: 0.1,
+                                    frictionAir: 0.01,
+                                    restitution: 0.2,
+                                    density: 0.001,
+                                    chamfer: { radius: 1 }
+                                });
+
+                                // Set physics properties
+                                mergedFruit.setStatic(false);
+                                mergedFruit.setBounce(0.2);
+                                mergedFruit.setFriction(0.1);
+                                mergedFruit.setFrictionStatic(0.1);
+                                mergedFruit.setFrictionAir(0.01);
+                                mergedFruit.setDensity(0.001);
+
+                                // Track type for merging later
+                                mergedFruit.body.fruitType = newFruitType;
+
+                                // Add to fruits array
+                                this.fruits.push(mergedFruit);
+                            }
                         }
                     }
                 });
@@ -350,8 +422,8 @@
             // Enable physics on the container and attach a circular Matter body
             this.matter.add.gameObject(fruit, {
                 shape: {
-                    type: 'circle',
-                    radius: radius
+                type: 'circle',
+                radius: radius
                 },
                 friction: 0.1,
                 frictionStatic: 0.1,
@@ -522,7 +594,33 @@
                 this.dropIndicator.destroy();
                 this.dropIndicator = null;
               }
+                }
             }
+        
+          playPopSound() {
+            // Select a random pop sound configuration
+            const randomIndex = Phaser.Math.Between(0, this.popSounds.length - 1);
+            const popSound = this.popSounds[randomIndex];
+            
+            // Create a new oscillator
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            
+            // Set up the oscillator
+            oscillator.type = 'sine';
+            oscillator.frequency.value = popSound.frequency;
+            
+            // Set up the gain node
+            gainNode.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + popSound.decay);
+            
+            // Connect the nodes
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Start and stop the oscillator
+            oscillator.start();
+            oscillator.stop(this.audioContext.currentTime + popSound.decay);
           }
         }
         
@@ -544,7 +642,7 @@
                 restitution: 0.6
             }
           },
-          scene: [SuikaScene]
+          scene: [PlanetCrackerScene]
         });
         </script>
 </body>
