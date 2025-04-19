@@ -57,124 +57,51 @@
               { frequency: 783.99, decay: 0.13 }   // G5 note
             ];
 
-            // Get the center of the screen
-            this.centerX = this.cameras.main.width / 2;
-            this.centerY = this.cameras.main.height / 2;
-        
-            // Calculate play area position (centered)
-            this.playAreaX = this.centerX;
-            this.playAreaY = this.centerY;
-        
-            // Initialize fruits array
-            this.fruits = [];
-            
-            // Initialize fruit queue with two random fruits
-            this.fruitQueue = [
-              Phaser.Math.Between(0, 4),
-              Phaser.Math.Between(0, 4)
-            ];
-            
-            // Add score display
-            this.scoreText = this.add.text(
-              this.playAreaX - 200 - 100, // Left of play area
-              this.playAreaY - 270, // Same height as prediction display
-              '0',
+            // Add debug button for game over
+            const debugButton = this.add.rectangle(
+              60,
+              30,
+              100,
+              40,
+              0x333333
+            );
+            debugButton.setStrokeStyle(2, 0x000000);
+
+            // Add debug button text
+            const debugText = this.add.text(
+              60,
+              30,
+              'DEBUG\nGAME OVER',
               {
-                fontSize: '32px',
+                fontSize: '12px',
                 fontFamily: 'Arial',
                 color: '#ffffff',
-                backgroundColor: '#333333',
-                padding: { x: 10, y: 5 }
+                align: 'center'
               }
             );
-            this.scoreText.setOrigin(0.5);
-            
-            // Enable Matter.js physics with bounds for sides and bottom only
-            this.matter.world.setBounds(
-              this.playAreaX - 200, // left
-              this.playAreaY - 300, // top
-              400, // width
-              600, // height (back to original)
-              10, // thickness
-              true, // left
-              true, // right
-              false, // top
-              true  // bottom
-            );
+            debugText.setOrigin(0.5);
 
-            // Add top border separately
-            this.topBorder = this.matter.add.rectangle(
-              this.playAreaX,
-              this.playAreaY - 300 + 5,
-              400,
-              5,
-              { 
-                isStatic: true,
-                isSensor: true,
-                render: { visible: false }
-              }
-            );
-            
-            // Add visible box with exact same dimensions
-            const playAreaRect = this.add.rectangle(this.playAreaX, this.playAreaY, 400, 600).setStrokeStyle(2, 0x000000);
-            
-            // Add extended rectangle above play area
-            const extendedRect = this.add.rectangle(
-                this.playAreaX,
-                this.playAreaY - 300 - 35, // Center of the extended part
-                400,
-                70, // Height of the extended part
-                0xffffff, // White fill
-                0 // No fill alpha
-            ).setStrokeStyle(2, 0x000000);
-            
-            // Add prediction display
-            const predictionSize = FRUIT_SIZES[4] * 1.2; // Size to fit 5th smallest fruit with some padding
-            const predictionX = this.playAreaX + 310; // Moved 60 pixels right
-            const predictionY = this.playAreaY - 270; // Moved another 60 pixels up
-            
-            // Add prediction container
-            this.predictionContainer = this.add.container(predictionX, predictionY);
-            
-            // Add prediction background
-            const predictionBg = this.add.rectangle(0, 0, predictionSize, predictionSize, 0x333333)
-                .setStrokeStyle(2, 0x000000);
-            this.predictionContainer.add(predictionBg);
-            
-            // Add prediction fruit (will be updated in spawnNextFruit)
-            this.predictionFruit = this.add.container(0, 0);
-            this.predictionContainer.add(this.predictionFruit);
-            
-            this.currentFruit = null;
-            this.lastCursorX = this.playAreaX; // Initialize with center position
-        
-            this.spawnNextFruit();
-        
-            // Add input handlers
-            this.input.on('pointermove', pointer => {
-              if (!this.gameOver && this.currentFruit && !this.dropCooldown) {
-                const radius = FRUIT_SIZES[this.currentFruit.body.fruitType] / 2;
-                let minX = this.playAreaX - 200 + radius;
-                let maxX = this.playAreaX + 200 - radius;
-                this.lastCursorX = Phaser.Math.Clamp(pointer.x, minX, maxX);
-                this.currentFruit.setX(this.lastCursorX);
-              } else if (!this.gameOver) {
-                // Update last cursor position even when not moving a fruit
-                // Use the radius of the next fruit to be spawned
-                const nextRadius = FRUIT_SIZES[this.fruitQueue[0]] / 2;
-                let minX = this.playAreaX - 200 + nextRadius;
-                let maxX = this.playAreaX + 200 - nextRadius;
-                this.lastCursorX = Phaser.Math.Clamp(pointer.x, minX, maxX);
-              }
+            // Make debug button interactive
+            debugButton.setInteractive();
+            debugButton.on('pointerover', () => {
+              debugButton.setFillStyle(0x444444);
             });
-        
-            this.input.on('pointerdown', () => {
-              if (!this.gameOver && !this.dropCooldown && this.currentFruit) {
-                this.dropFruit();
-              }
+            debugButton.on('pointerout', () => {
+              debugButton.setFillStyle(0x333333);
+            });
+            debugButton.on('pointerdown', () => {
+              this.endGame();
             });
 
-            // Add collision event handler for all fruits
+            // Add keyboard shortcut for game over (press 'G')
+            this.input.keyboard.on('keydown-G', () => {
+              this.endGame();
+            });
+
+            // Set up input handlers
+            this.setupInputHandlers();
+
+            // Set up collision handling
             this.matter.world.on('collisionstart', (event) => {
                 if (this.gameOver) return;
 
@@ -357,15 +284,156 @@
                     }
                 });
             });
+
+            // Get the center of the screen
+            this.centerX = this.cameras.main.width / 2;
+            this.centerY = this.cameras.main.height / 2;
+        
+            // Calculate play area position (centered)
+            this.playAreaX = this.centerX;
+            this.playAreaY = this.centerY;
+        
+            // Initialize fruits array
+            this.fruits = [];
+            
+            // Initialize fruit queue with two random fruits
+            this.fruitQueue = [
+              Phaser.Math.Between(0, 4),
+              Phaser.Math.Between(0, 4)
+            ];
+            
+            // Add score display
+            this.scoreText = this.add.text(
+              this.playAreaX - 200 - 100, // Left of play area
+              this.playAreaY - 270, // Same height as prediction display
+              '0',
+              {
+                fontSize: '32px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                backgroundColor: '#333333',
+                padding: { x: 10, y: 5 }
+              }
+            );
+            this.scoreText.setOrigin(0.5);
+            
+            // Enable Matter.js physics with bounds for sides and bottom only
+            this.matter.world.setBounds(
+              this.playAreaX - 200, // left
+              this.playAreaY - 300, // top
+              400, // width
+              600, // height (back to original)
+              10, // thickness
+              true, // left
+              true, // right
+              false, // top
+              true  // bottom
+            );
+
+            // Add top border separately
+            this.topBorder = this.matter.add.rectangle(
+              this.playAreaX,
+              this.playAreaY - 300 + 5,
+              400,
+              5,
+              { 
+                isStatic: true,
+                isSensor: true,
+                render: { visible: false }
+              }
+            );
+            
+            // Add visible box with exact same dimensions
+            const playAreaRect = this.add.rectangle(this.playAreaX, this.playAreaY, 400, 600).setStrokeStyle(2, 0x000000);
+            
+            // Add extended rectangle above play area
+            const extendedRect = this.add.rectangle(
+                this.playAreaX,
+                this.playAreaY - 300 - 35, // Center of the extended part
+                400,
+                70, // Height of the extended part
+                0xffffff, // White fill
+                0 // No fill alpha
+            ).setStrokeStyle(2, 0x000000);
+            
+            // Add prediction display
+            const predictionSize = FRUIT_SIZES[4] * 1.2; // Size to fit 5th smallest fruit with some padding
+            const predictionX = this.playAreaX + 310; // Moved 60 pixels right
+            const predictionY = this.playAreaY - 270; // Moved another 60 pixels up
+            
+            // Add prediction container
+            this.predictionContainer = this.add.container(predictionX, predictionY);
+            
+            // Add prediction background
+            const predictionBg = this.add.rectangle(0, 0, predictionSize, predictionSize, 0x333333)
+                .setStrokeStyle(2, 0x000000);
+            this.predictionContainer.add(predictionBg);
+            
+            // Add prediction fruit (will be updated in spawnNextFruit)
+            this.predictionFruit = this.add.container(0, 0);
+            this.predictionContainer.add(this.predictionFruit);
+            
+            this.currentFruit = null;
+            this.lastCursorX = this.playAreaX; // Initialize with center position
+        
+            this.spawnNextFruit();
+
+
+
+
+            // --- Guide Arrow & Merge‑Order Display ---
+
+            // 1) Define your guide area
+            const guideLeftX = 100;           // same as playfield left
+            const guideWidth = 400;           // same as playfield width
+            const arrowY = 620;               // just below your 600px‑tall playfield
+            const headSize = 12;              // size of arrowhead
+
+            // 2) Draw the horizontal line
+            const graphics = this.add.graphics();
+            graphics.lineStyle(4, 0x000000);
+            graphics.beginPath();
+            graphics.moveTo(guideLeftX, arrowY);
+            graphics.lineTo(guideLeftX + guideWidth, arrowY);
+            graphics.strokePath();
+
+            // 3) Draw the arrowhead at the right end
+            graphics.fillStyle(0x000000);
+            graphics.fillTriangle(
+              guideLeftX + guideWidth, arrowY,
+              guideLeftX + guideWidth - headSize, arrowY - headSize,
+              guideLeftX + guideWidth - headSize, arrowY + headSize
+            );
+
+            // 4) Lay out the circles beneath the arrow
+            const count = FRUIT_SIZES.length-1;  // 10
+            for (let i = 0; i < count; i++) {
+              const radius = Math.sqrt(FRUIT_SIZES[i] / 2);
+              const spacing = guideWidth / (count - 1);
+              const x = guideLeftX + spacing * i;
+              const y = arrowY + headSize + radius + 6; // a little padding under arrow
+
+              this.add.circle(x, y, radius,
+                Phaser.Display.Color.HexStringToColor(COLORS[i]).color
+              ).setStrokeStyle(2, 0x333333);
+            }
           }
         
           endGame() {
             this.gameOver = true;
             
+            // Freeze all fruits
+            this.fruits.forEach(fruit => {
+              fruit.setStatic(true);
+            });
+            
+            // Stop physics simulation
+            this.matter.world.enabled = false;
+            
             // Add game over text
-            const gameOverText = this.add.text(
+            this.gameOverText = this.add.text(
               this.centerX,
-              this.centerY,
+              this.centerY - 50,
               'GAME OVER',
               {
                 fontSize: '64px',
@@ -375,7 +443,116 @@
                 strokeThickness: 4
               }
             );
-            gameOverText.setOrigin(0.5);
+            this.gameOverText.setOrigin(0.5);
+
+            // Add New Game button
+            this.newGameButton = this.add.rectangle(
+              this.centerX,
+              this.centerY + 50,
+              200,
+              50,
+              0x333333
+            );
+            this.newGameButton.setStrokeStyle(2, 0x000000);
+
+            // Add button text
+            this.newGameText = this.add.text(
+              this.centerX,
+              this.centerY + 50,
+              'NEW GAME',
+              {
+                fontSize: '24px',
+                fontFamily: 'Arial',
+                color: '#ffffff'
+              }
+            );
+            this.newGameText.setOrigin(0.5);
+
+            // Make button interactive
+            this.newGameButton.setInteractive();
+            this.newGameButton.on('pointerover', () => {
+              this.newGameButton.setFillStyle(0x444444);
+            });
+            this.newGameButton.on('pointerout', () => {
+              this.newGameButton.setFillStyle(0x333333);
+            });
+            this.newGameButton.on('pointerdown', () => {
+              // Clean up old event listeners
+              this.input.removeAllListeners();
+              
+              // Remove all existing game objects
+              this.fruits.forEach(fruit => fruit.destroy());
+              this.fruits = [];
+              if (this.currentFruit) {
+                this.currentFruit.destroy();
+                this.currentFruit = null;
+              }
+              if (this.dropIndicator) {
+                this.dropIndicator.destroy();
+                this.dropIndicator = null;
+              }
+
+              // Remove game over UI
+              this.gameOverText.destroy();
+              this.newGameButton.destroy();
+              this.newGameText.destroy();
+              
+              // Reset game state
+              this.gameOver = false;
+              this.dropCooldown = false;
+              this.currentFruitHasCollided = false;
+              this.score = 0;
+              this.scoreText.setText('0');
+              this.fruitQueue = [
+                Phaser.Math.Between(0, 4),
+                Phaser.Math.Between(0, 4)
+              ];
+              
+              // Reset physics
+              this.matter.world.enabled = true;
+              
+              // Remove all physics bodies except boundaries
+              const bodies = this.matter.world.localWorld.bodies;
+              for (let i = bodies.length - 1; i >= 0; i--) {
+                const body = bodies[i];
+                if (!body.isStatic) {  // Don't remove static bodies (boundaries)
+                  this.matter.world.remove(body);
+                }
+              }
+              
+              // Re-add input handlers
+              this.setupInputHandlers();
+              
+              // Wait a frame before spawning new fruit to ensure everything is cleaned up
+              this.scene.scene.time.delayedCall(100, () => {
+                this.spawnNextFruit();
+              });
+            });
+          }
+        
+          setupInputHandlers() {
+            this.input.on('pointermove', pointer => {
+              if (!this.gameOver && this.currentFruit && !this.dropCooldown) {
+                const radius = FRUIT_SIZES[this.currentFruit.body.fruitType] / 2;
+                let minX = this.playAreaX - 200 + radius;
+                let maxX = this.playAreaX + 200 - radius;
+                this.lastCursorX = Phaser.Math.Clamp(pointer.x, minX, maxX);
+                this.currentFruit.setX(this.lastCursorX);
+              } else if (!this.gameOver) {
+                // Update last cursor position even when not moving a fruit
+                // Use the radius of the next fruit to be spawned
+                const nextRadius = FRUIT_SIZES[this.fruitQueue[0]] / 2;
+                let minX = this.playAreaX - 200 + nextRadius;
+                let maxX = this.playAreaX + 200 - nextRadius;
+                this.lastCursorX = Phaser.Math.Clamp(pointer.x, minX, maxX);
+              }
+            });
+        
+            this.input.on('pointerdown', () => {
+              if (!this.gameOver && !this.dropCooldown && this.currentFruit) {
+                this.dropFruit();
+            }
+            });
           }
         
           spawnNextFruit() {
@@ -580,9 +757,9 @@
                 landingY,
                 distance: landingY - startY
             });
-          }
+            }
         
-          dropFruit() {
+            dropFruit() {
             if (this.currentFruit && !this.dropCooldown) {
               this.dropCooldown = true;
               this.currentFruitHasCollided = false;
@@ -621,7 +798,7 @@
             // Start and stop the oscillator
             oscillator.start();
             oscillator.stop(this.audioContext.currentTime + popSound.decay);
-          }
+            }
         }
         
         game = new Phaser.Game({
