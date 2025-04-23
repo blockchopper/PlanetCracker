@@ -648,8 +648,14 @@
         
           update() {
             if (this.currentFruit && !this.dropCooldown) {
-              this.updateDropIndicator();
+                this.updateDropIndicator();
             }
+
+            // Log frame rate
+            console.log('Frame Rate:', this.game.loop.actualFps);
+
+            // Log time step
+            console.log('Time Step:', this.game.loop.delta);
           }
         
           updateDropIndicator() {
