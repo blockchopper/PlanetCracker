@@ -52,6 +52,7 @@
             this.score = 0; // Initialize score
             this.audioContext = null; // Will hold the audio context
             this.popSounds = []; // Will hold our pop sound configurations
+            this.physicsAccumulator = 0; // Initialize physics accumulator
           }
         
           preload() {}
@@ -615,8 +616,15 @@
             this.predictionFruit.add([circle, line]);
           }
         
-          update() {
-            this.matter.world.step(1000 / 60);
+          update(time, delta) {
+            // Fixed timestep logic
+            this.physicsAccumulator += delta;
+            const fixedTimestep = 1000 / 60; // Target physics step rate (60Hz)
+
+            while (this.physicsAccumulator >= fixedTimestep) {
+              this.matter.world.step(fixedTimestep); 
+              this.physicsAccumulator -= fixedTimestep;
+            }
 
             // Check fruits for game over timer cancellation
             if (!this.gameOver) { // Only check if game isn't already over
